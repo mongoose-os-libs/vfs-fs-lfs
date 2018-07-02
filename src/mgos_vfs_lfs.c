@@ -21,6 +21,7 @@
 #include <stdio.h>
 
 #include "mgos.h"
+#include "mgos_vfs.h"
 
 #include "lfs.h"
 
