@@ -21,8 +21,11 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
+
+#include "frozen.h"
 
 #include "mem_lfs.h"
 
@@ -34,7 +37,7 @@ bool copy(char *src, char *dst) {
   lfs_file_t f;
   int ifd = -1;
 
-  fprintf(stderr, "     Adding %s: ", dst);
+  fprintf(stderr, "       Adding %s: ", dst);
 
   ifd = open(src, O_RDONLY);
   if (ifd < 0) {
@@ -112,8 +115,8 @@ cleanup:
 void show_usage(char *argv[], const char *err_msg) {
   if (err_msg != NULL) fprintf(stderr, "Error: %s\r\n", err_msg);
   fprintf(stderr,
-          "usage: %s [-s fs_size] [-b block_size] "
-          "[-f image_file] [-u] [-d] <root_dir>\n",
+          "usage: %s [-u] [-d] [-s fs_size] [-b block_size] "
+          "[-f image_file] [-o json_opts] <root_dir>\n",
           argv[0]);
   exit(1);
 }
@@ -132,7 +135,7 @@ int main(int argc, char **argv) {
   bool update = false;
   int fs_size = -1, bs = 4096;
 
-  while ((opt = getopt(argc, argv, "b:de:f:p:s:u")) != -1) {
+  while ((opt = getopt(argc, argv, "b:df:o:s:u")) != -1) {
     switch (opt) {
       case 'b': {
         bs = (size_t) strtol(optarg, NULL, 0);
@@ -148,6 +151,10 @@ int main(int argc, char **argv) {
       }
       case 'f': {
         image_file = optarg;
+        break;
+      }
+      case 'o': {
+        json_scanf(optarg, strlen(optarg), "{size: %u, bs: %u}", &fs_size, &bs);
         break;
       }
       case 's': {
@@ -185,6 +192,7 @@ int main(int argc, char **argv) {
     fprintf(stderr, "unable to open directory %s\n", root_dir);
     return 1;
   } else {
+    fprintf(stderr, "     FS params: size=%u, bs=%u\n", fs_size, bs);
     if (!read_dir(dir, root_dir)) {
       return 1;
     }
@@ -193,9 +201,8 @@ int main(int argc, char **argv) {
   uint32_t total = fs_size, used = 0;
   lfs_traverse(mem_lfs_get(), count_used, &used);
   used *= bs;
-  fprintf(stderr,
-          "     Image stats: size=%u, space: total=%u, used=%u, free=%u\n",
-          (unsigned int) fs_size, total, used, total - used);
+  fprintf(stderr, "     FS stats : space total=%u, used=%u, free=%u\n", total,
+          used, total - used);
 
   return mem_lfs_dump(image_file) ? 0 : 2;
 }
