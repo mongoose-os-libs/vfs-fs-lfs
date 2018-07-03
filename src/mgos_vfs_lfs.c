@@ -92,14 +92,14 @@ static bool mgos_vfs_fs_lfs_parse_opts(struct mgos_vfs_fs *fs,
   cfg->erase = mgos_lfs_erase;
   cfg->sync = mgos_lfs_sync;
   cfg->read_size = MGOS_LFS_DEFAULT_IO_SIZE;
-  cfg->prog_size = MGOS_LFS_DEFAULT_IO_SIZE;
   cfg->block_size = MGOS_LFS_DEFAULT_BLOCK_SIZE;
   cfg->lookahead = 1024;
   lfs_size_t size = 0;
   if (opts != NULL) {
-    json_scanf(opts, strlen(opts), "{size: %u, is: %u, ps: %u, bs: %u}", &size,
-               &cfg->read_size, &cfg->prog_size, &cfg->block_size);
+    json_scanf(opts, strlen(opts), "{size: %u, bs: %u, is: %u}", &size,
+               &cfg->block_size, &cfg->read_size);
   }
+  cfg->prog_size = cfg->read_size;
   if (size == 0) {
     size = fs->dev->ops->get_size(fs->dev);
     if (size == 0) {
@@ -124,6 +124,7 @@ static bool mgos_vfs_fs_lfs_mount(struct mgos_vfs_fs *fs, const char *opts) {
   struct mgos_lfs_data *fsd = (struct mgos_lfs_data *) calloc(1, sizeof(*fsd));
   struct lfs_config *cfg;
   if (fsd == NULL) goto out;
+  fsd->fs = fs;
   cfg = &fsd->cfg;
   if (!mgos_vfs_fs_lfs_parse_opts(fs, cfg, opts)) goto out;
   cfg->context = fsd;
@@ -146,9 +147,9 @@ out:
 static bool mgos_vfs_fs_lfs_mkfs(struct mgos_vfs_fs *fs, const char *opts) {
   int mr;
   bool ret = false;
-  struct mgos_lfs_data fsd;
-  memset(&fsd, 0, sizeof(fsd));
+  struct mgos_lfs_data fsd = {.fs = fs};
   struct lfs_config *cfg = &fsd.cfg;
+  cfg->context = &fsd;
   if (!mgos_vfs_fs_lfs_parse_opts(fs, cfg, opts)) goto out;
   mr = lfs_format(&fsd.lfs, cfg);
   ret = (mr == LFS_ERR_OK);
@@ -236,7 +237,8 @@ static int mgos_lfs_err_to_errno(int r) {
 
 static off_t mgos_lfs_set_errno(off_t res) {
   if (res >= 0) return res;
-  return (errno = mgos_lfs_err_to_errno(res));
+  int ret = (errno = mgos_lfs_err_to_errno(res));
+  return (ret < 0 ? ret : -ret);
 }
 
 static struct mgos_lfs_fd_info *mgos_lfs_get_fdi(struct mgos_lfs_data *fsd,
@@ -251,6 +253,7 @@ static struct mgos_lfs_fd_info *mgos_lfs_get_fdi(struct mgos_lfs_data *fsd,
 static int mgos_vfs_fs_lfs_open(struct mgos_vfs_fs *fs, const char *path,
                                 int flags, int mode) {
   struct mgos_lfs_data *fsd = (struct mgos_lfs_data *) fs->fs_data;
+  struct mgos_lfs_fd_info *fdi;
   int lfs_flags, r;
   (void) mode;
   switch (flags & 3) {
@@ -268,12 +271,13 @@ static int mgos_vfs_fs_lfs_open(struct mgos_vfs_fs *fs, const char *path,
       goto out;
   }
   if (flags & O_CREAT) lfs_flags |= LFS_O_CREAT;
+#ifdef O_EXCL
   if (flags & O_EXCL) lfs_flags |= LFS_O_EXCL;
+#endif
   if (flags & O_TRUNC) lfs_flags |= LFS_O_TRUNC;
   if (flags & O_APPEND) lfs_flags |= LFS_O_APPEND;
 
-  struct mgos_lfs_fd_info *fdi =
-      (struct mgos_lfs_fd_info *) calloc(1, sizeof(*fdi));
+  fdi = (struct mgos_lfs_fd_info *) calloc(1, sizeof(*fdi));
   if (fdi == NULL) {
     r = LFS_ERR_NOMEM;
     goto out;
@@ -290,6 +294,7 @@ static int mgos_vfs_fs_lfs_open(struct mgos_vfs_fs *fs, const char *path,
         goto out;
       }
     }
+    SLIST_INSERT_HEAD(&fsd->fds, fdi, next);
   } else {
     free(fdi);
   }
@@ -453,11 +458,11 @@ static struct dirent *mgos_vfs_fs_lfs_readdir(struct mgos_vfs_fs *fs,
   struct mgos_lfs_dir *d = (struct mgos_lfs_dir *) dir;
   struct lfs_info info;
   int r = lfs_dir_read(&fsd->lfs, &d->lfsd, &info);
-  if (r != LFS_ERR_OK) goto out;
+  if (r <= 0) goto out;
   strncpy(d->de.d_name, info.name,
           MAX(sizeof(d->de.d_name), sizeof(info.name)) - 1);
 out:
-  if (r != LFS_ERR_OK) {
+  if (r <= 0) {
     mgos_lfs_set_errno(r);
     return NULL;
   }

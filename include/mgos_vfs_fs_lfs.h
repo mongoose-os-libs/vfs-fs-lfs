@@ -11,7 +11,7 @@
 extern "C" {
 #endif
 
-#define MGOS_VFS_FS_TYPE_LFS "lfs"
+#define MGOS_VFS_FS_TYPE_LFS "LFS"
 
 #ifdef __cplusplus
 }
