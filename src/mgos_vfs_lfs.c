@@ -479,6 +479,7 @@ static int mgos_vfs_fs_lfs_closedir(struct mgos_vfs_fs *fs, DIR *dir) {
 #endif /* MG_ENABLE_DIRECTORY_LISTING */
 
 static bool mgos_vfs_fs_lfs_gc(struct mgos_vfs_fs *fs) {
+  /* TODO(rojer): Scrub free blocks. */
   (void) fs;
   return true;
 }

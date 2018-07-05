@@ -1352,6 +1352,8 @@ int lfs_file_open(lfs_t *lfs, lfs_file_t *file,
         if (!file->cache.buffer) {
             return LFS_ERR_NOMEM;
         }
+        /* Temp fix for https://github.com/ARMmbed/littlefs/issues/67 */
+        memset(file->cache.buffer, 0xff, lfs->cfg->prog_size);
     }
 
     // add to list of files
@@ -2014,6 +2016,8 @@ static int lfs_init(lfs_t *lfs, const struct lfs_config *cfg) {
             return LFS_ERR_NOMEM;
         }
     }
+    /* Temp fix for https://github.com/ARMmbed/littlefs/issues/67 */
+    memset(lfs->pcache.buffer, 0xff, lfs->cfg->prog_size);
 
     // setup lookahead, round down to nearest 32-bits
     LFS_ASSERT(lfs->cfg->lookahead % 32 == 0);
