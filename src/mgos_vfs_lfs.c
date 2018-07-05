@@ -50,32 +50,26 @@ struct mgos_lfs_data {
 static int mgos_lfs_read(const struct lfs_config *c, lfs_block_t block,
                          lfs_off_t off, void *buffer, lfs_size_t size) {
   struct mgos_lfs_data *fsd = (struct mgos_lfs_data *) c->context;
-  if (!fsd->fs->dev->ops->read(fsd->fs->dev, block * c->block_size + off, size,
-                               buffer)) {
-    return LFS_ERR_IO;
-  }
-  return LFS_ERR_OK;
+  enum mgos_vfs_dev_err res = fsd->fs->dev->ops->read(
+      fsd->fs->dev, block * c->block_size + off, size, buffer);
+  return (res == MGOS_VFS_DEV_ERR_CORRUPT ? LFS_ERR_CORRUPT : res);
 }
 
 static int mgos_lfs_prog(const struct lfs_config *c, lfs_block_t block,
                          lfs_off_t off, const void *buffer, lfs_size_t size) {
   struct mgos_lfs_data *fsd = (struct mgos_lfs_data *) c->context;
-  if (!fsd->fs->dev->ops->write(fsd->fs->dev, block * c->block_size + off, size,
-                                buffer)) {
-    return LFS_ERR_IO;
-  }
+  enum mgos_vfs_dev_err res = fsd->fs->dev->ops->write(
+      fsd->fs->dev, block * c->block_size + off, size, buffer);
   fsd->num_blocks_used = 0;
-  return LFS_ERR_OK;
+  return (res == MGOS_VFS_DEV_ERR_CORRUPT ? LFS_ERR_CORRUPT : res);
 }
 
 static int mgos_lfs_erase(const struct lfs_config *c, lfs_block_t block) {
   struct mgos_lfs_data *fsd = (struct mgos_lfs_data *) c->context;
-  if (!fsd->fs->dev->ops->erase(fsd->fs->dev, block * c->block_size,
-                                c->block_size)) {
-    return LFS_ERR_IO;
-  }
+  enum mgos_vfs_dev_err res = fsd->fs->dev->ops->erase(
+      fsd->fs->dev, block * c->block_size, c->block_size);
   fsd->num_blocks_used = 0;
-  return LFS_ERR_OK;
+  return (res == MGOS_VFS_DEV_ERR_CORRUPT ? LFS_ERR_CORRUPT : res);
 }
 
 static int mgos_lfs_sync(const struct lfs_config *c) {
