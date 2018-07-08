@@ -307,6 +307,7 @@ static int mgos_vfs_fs_lfs_close(struct mgos_vfs_fs *fs, int fd) {
   r = lfs_file_close(&fsd->lfs, &fdi->f);
   /* Even if error is returned, file is no longer valid. */
   SLIST_REMOVE(&fsd->fds, fdi, mgos_lfs_fd_info, next);
+  free(fdi);
 out:
   return mgos_lfs_set_errno(r);
 }
