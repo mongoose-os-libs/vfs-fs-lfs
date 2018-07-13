@@ -184,7 +184,7 @@ static size_t mgos_vfs_fs_lfs_get_blocks_used(struct mgos_lfs_data *fsd) {
 
 static size_t mgos_vfs_fs_lfs_get_space_total(struct mgos_vfs_fs *fs) {
   struct mgos_lfs_data *fsd = (struct mgos_lfs_data *) fs->fs_data;
-  return fsd->cfg.block_size * (fsd->cfg.block_count - 2 /* superblock, 2x */);
+  return fsd->cfg.block_size * fsd->cfg.block_count;
 }
 
 static size_t mgos_vfs_fs_lfs_get_space_used(struct mgos_vfs_fs *fs) {
