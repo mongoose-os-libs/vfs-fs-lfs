@@ -50,7 +50,7 @@ struct mgos_lfs_data {
 static int mgos_lfs_read(const struct lfs_config *c, lfs_block_t block,
                          lfs_off_t off, void *buffer, lfs_size_t size) {
   struct mgos_lfs_data *fsd = (struct mgos_lfs_data *) c->context;
-  enum mgos_vfs_dev_err res = fsd->fs->dev->ops->read(
+  enum mgos_vfs_dev_err res = mgos_vfs_dev_read(
       fsd->fs->dev, block * c->block_size + off, size, buffer);
   return (res == MGOS_VFS_DEV_ERR_CORRUPT ? LFS_ERR_CORRUPT : res);
 }
@@ -58,7 +58,7 @@ static int mgos_lfs_read(const struct lfs_config *c, lfs_block_t block,
 static int mgos_lfs_prog(const struct lfs_config *c, lfs_block_t block,
                          lfs_off_t off, const void *buffer, lfs_size_t size) {
   struct mgos_lfs_data *fsd = (struct mgos_lfs_data *) c->context;
-  enum mgos_vfs_dev_err res = fsd->fs->dev->ops->write(
+  enum mgos_vfs_dev_err res = mgos_vfs_dev_write(
       fsd->fs->dev, block * c->block_size + off, size, buffer);
   fsd->num_blocks_used = 0;
   return (res == MGOS_VFS_DEV_ERR_CORRUPT ? LFS_ERR_CORRUPT : res);
@@ -66,8 +66,8 @@ static int mgos_lfs_prog(const struct lfs_config *c, lfs_block_t block,
 
 static int mgos_lfs_erase(const struct lfs_config *c, lfs_block_t block) {
   struct mgos_lfs_data *fsd = (struct mgos_lfs_data *) c->context;
-  enum mgos_vfs_dev_err res = fsd->fs->dev->ops->erase(
-      fsd->fs->dev, block * c->block_size, c->block_size);
+  enum mgos_vfs_dev_err res =
+      mgos_vfs_dev_erase(fsd->fs->dev, block * c->block_size, c->block_size);
   fsd->num_blocks_used = 0;
   return (res == MGOS_VFS_DEV_ERR_CORRUPT ? LFS_ERR_CORRUPT : res);
 }
@@ -95,7 +95,7 @@ static bool mgos_vfs_fs_lfs_parse_opts(struct mgos_vfs_fs *fs,
   }
   cfg->prog_size = cfg->read_size;
   if (size == 0) {
-    size = fs->dev->ops->get_size(fs->dev);
+    size = mgos_vfs_dev_get_size(fs->dev);
     if (size == 0) {
       LOG(LL_ERROR, ("size not specified"));
       goto out;
