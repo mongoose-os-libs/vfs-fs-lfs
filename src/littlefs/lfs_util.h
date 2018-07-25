@@ -2,19 +2,8 @@
 /*
  * lfs utility functions
  *
- * Copyright (c) 2017 ARM Limited
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright (c) 2017, Arm Limited. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause
  */
 #ifndef LFS_UTIL_H
 #define LFS_UTIL_H
@@ -44,6 +33,11 @@
 #endif
 #if !defined(LFS_NO_DEBUG) || !defined(LFS_NO_WARN) || !defined(LFS_NO_ERROR)
 #include <stdio.h>
+#endif
+
+#ifdef __cplusplus
+extern "C"
+{
 #endif
 
 
@@ -170,6 +164,7 @@ static inline void *lfs_malloc(size_t size) {
 #ifndef LFS_NO_MALLOC
     return malloc(size);
 #else
+    (void)size;
     return NULL;
 #endif
 }
@@ -178,9 +173,15 @@ static inline void *lfs_malloc(size_t size) {
 static inline void lfs_free(void *p) {
 #ifndef LFS_NO_MALLOC
     free(p);
+#else
+    (void)p;
 #endif
 }
 
+
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
 
 #endif
 #endif

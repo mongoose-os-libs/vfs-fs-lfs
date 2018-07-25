@@ -2,19 +2,8 @@
 /*
  * The little filesystem
  *
- * Copyright (c) 2017 ARM Limited
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright (c) 2017, Arm Limited. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause
  */
 #ifndef LFS_H
 #define LFS_H
@@ -22,13 +11,18 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+
 
 /// Version info ///
 
 // Software library version
 // Major (top-nibble), incremented on backwards incompatible changes
 // Minor (bottom-nibble), incremented on feature additions
-#define LFS_VERSION 0x00010003
+#define LFS_VERSION 0x00010005
 #define LFS_VERSION_MAJOR (0xffff & (LFS_VERSION >> 16))
 #define LFS_VERSION_MINOR (0xffff & (LFS_VERSION >>  0))
 
@@ -174,6 +168,12 @@ struct lfs_config {
     void *file_buffer;
 };
 
+// Optional configuration provided during lfs_file_opencfg
+struct lfs_file_config {
+    // Optional, statically allocated buffer for files. Must be program sized.
+    // If NULL, malloc will be used by default.
+    void *buffer;
+};
 
 // File info structure
 struct lfs_info {
@@ -221,6 +221,7 @@ typedef struct lfs_file {
     lfs_block_t head;
     lfs_size_t size;
 
+    const struct lfs_file_config *cfg;
     uint32_t flags;
     lfs_off_t pos;
     lfs_block_t block;
@@ -288,7 +289,8 @@ typedef struct lfs {
 // Format a block device with the littlefs
 //
 // Requires a littlefs object and config struct. This clobbers the littlefs
-// object, and does not leave the filesystem mounted.
+// object, and does not leave the filesystem mounted. The config struct must
+// be zeroed for defaults and backwards compatibility.
 //
 // Returns a negative error code on failure.
 int lfs_format(lfs_t *lfs, const struct lfs_config *config);
@@ -297,7 +299,8 @@ int lfs_format(lfs_t *lfs, const struct lfs_config *config);
 //
 // Requires a littlefs object and config struct. Multiple filesystems
 // may be mounted simultaneously with multiple littlefs objects. Both
-// lfs and config must be allocated while mounted.
+// lfs and config must be allocated while mounted. The config struct must
+// be zeroed for defaults and backwards compatibility.
 //
 // Returns a negative error code on failure.
 int lfs_mount(lfs_t *lfs, const struct lfs_config *config);
@@ -335,13 +338,26 @@ int lfs_stat(lfs_t *lfs, const char *path, struct lfs_info *info);
 
 // Open a file
 //
-// The mode that the file is opened in is determined
-// by the flags, which are values from the enum lfs_open_flags
-// that are bitwise-ored together.
+// The mode that the file is opened in is determined by the flags, which
+// are values from the enum lfs_open_flags that are bitwise-ored together.
 //
 // Returns a negative error code on failure.
 int lfs_file_open(lfs_t *lfs, lfs_file_t *file,
         const char *path, int flags);
+
+// Open a file with extra configuration
+//
+// The mode that the file is opened in is determined by the flags, which
+// are values from the enum lfs_open_flags that are bitwise-ored together.
+//
+// The config struct provides additional config options per file as described
+// above. The config struct must be allocated while the file is open, and the
+// config struct must be zeroed for defaults and backwards compatibility.
+//
+// Returns a negative error code on failure.
+int lfs_file_opencfg(lfs_t *lfs, lfs_file_t *file,
+        const char *path, int flags,
+        const struct lfs_file_config *config);
 
 // Close a file
 //
@@ -471,5 +487,9 @@ int lfs_traverse(lfs_t *lfs, int (*cb)(void*, lfs_block_t), void *data);
 // Returns a negative error code on failure.
 int lfs_deorphan(lfs_t *lfs);
 
+
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
 
 #endif
