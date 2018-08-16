@@ -289,6 +289,7 @@ static int mgos_vfs_fs_lfs_open(struct mgos_vfs_fs *fs, const char *path,
       }
     }
     SLIST_INSERT_HEAD(&fsd->fds, fdi, next);
+    r = fdi->fd;
   } else {
     free(fdi);
   }
