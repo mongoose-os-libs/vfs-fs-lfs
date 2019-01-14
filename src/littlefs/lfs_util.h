@@ -134,7 +134,7 @@ static inline int lfs_scmp(uint32_t a, uint32_t b) {
 // Convert from 32-bit little-endian to native order
 static inline uint32_t lfs_fromle32(uint32_t a) {
 #if !defined(LFS_NO_INTRINSICS) && ( \
-    (defined(  BYTE_ORDER  ) &&   BYTE_ORDER   ==   ORDER_LITTLE_ENDIAN  ) || \
+    (defined(  BYTE_ORDER  ) && defined(ORDER_LITTLE_ENDIAN) &&  BYTE_ORDER   ==   ORDER_LITTLE_ENDIAN  ) || \
     (defined(__BYTE_ORDER  ) && __BYTE_ORDER   == __ORDER_LITTLE_ENDIAN  ) || \
     (defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__))
     return a;
