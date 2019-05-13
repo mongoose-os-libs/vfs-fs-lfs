@@ -25,6 +25,38 @@
 
 #include "lfs.h"
 
+#if MGOS_LFS1_COMPAT == 1
+#include "lfs1.h"
+#define LFS12_OP(op, fsd) \
+  (fsd->is_v1 ? lfs1_##op(&fsd->lfs1) : lfs_##op(&fsd->lfs))
+#define LFS12_OP_N(op, fsd, ...)                   \
+  (fsd->is_v1 ? lfs1_##op(&fsd->lfs1, __VA_ARGS__) \
+              : lfs_##op(&fsd->lfs, __VA_ARGS__))
+#define LFS12_DIR_OP(op, fsd, d)                     \
+  (fsd->is_v1 ? lfs1_dir_##op(&fsd->lfs1, &d->lfsd1) \
+              : lfs_dir_##op(&fsd->lfs, &d->lfsd))
+#define LFS12_DIR_OP_N(op, fsd, d, ...)                           \
+  (fsd->is_v1 ? lfs1_dir_##op(&fsd->lfs1, &d->lfsd1, __VA_ARGS__) \
+              : lfs_dir_##op(&fsd->lfs, &d->lfsd, __VA_ARGS__))
+#define LFS12_FILE_OP(op, fsd, fdi)                  \
+  (fsd->is_v1 ? lfs1_file_##op(&fsd->lfs1, &fdi->f1) \
+              : lfs_file_##op(&fsd->lfs, &fdi->f))
+#define LFS12_FILE_OP_N(op, fsd, fdi, ...)                        \
+  (fsd->is_v1 ? lfs1_file_##op(&fsd->lfs1, &fdi->f1, __VA_ARGS__) \
+              : lfs_file_##op(&fsd->lfs, &fdi->f, __VA_ARGS__))
+#else
+#define LFS12_OP(op, fsd) lfs_##op(&fsd->lfs)
+#define LFS12_OP_N(op, fsd, ...) lfs_##op(&fsd->lfs, __VA_ARGS__)
+#define LFS12_DIR_OP(op, fsd, d) lfs_dir_##op(&fsd->lfs, &d->lfsd)
+#define LFS12_DIR_OP_N(op, fsd, d, ...) \
+  lfs_dir_##op(&fsd->lfs, &d->lfsd, __VA_ARGS__)
+#define LFS12_FILE_OP(op, fsd, fdi) lfs_file_##op(&fsd->lfs, &fdi->f)
+#define LFS12_FILE_OP_N(op, fsd, fdi, ...) \
+  lfs_file_##op(&fsd->lfs, &fdi->f, __VA_ARGS__)
+#endif
+
+#define lfs_traverse lfs_fs_traverse
+
 #define MGOS_LFS_DEFAULT_IO_SIZE 64
 #define MGOS_LFS_DEFAULT_BLOCK_SIZE 4096
 
@@ -32,19 +64,37 @@ static const struct mgos_vfs_fs_ops mgos_vfs_fs_lfs_ops;
 
 struct mgos_lfs_fd_info {
   int fd;
-  lfs_file_t f;
+  union {
+    lfs_file_t f;
+#if MGOS_LFS1_COMPAT == 1
+    lfs1_file_t f1;
+#endif
+  };
   SLIST_ENTRY(mgos_lfs_fd_info) next;
 };
 
 struct mgos_lfs_data {
-  struct lfs_config cfg;
   struct mgos_vfs_fs *fs;
-  lfs_t lfs;
+  union {
+    struct lfs_config cfg;
+#if MGOS_LFS1_COMPAT == 1
+    struct lfs1_config cfg1;
+#endif
+  };
+  union {
+    lfs_t lfs;
+#if MGOS_LFS1_COMPAT == 1
+    lfs1_t lfs1;
+#endif
+  };
   SLIST_HEAD(fds, mgos_lfs_fd_info) fds;
   /* Number of blocks used. Requires traversal of all blocks in the FS and so is
-   * expensive to compute, so we cache it. Note that 0 iis not a valid value
+   * expensive to compute, so we cache it. Note that 0 is not a valid value
    * since at least 2 blocks are used for superblock and its copy. */
   int num_blocks_used;
+#if MGOS_LFS1_COMPAT == 1
+  bool is_v1;
+#endif
 };
 
 static int mgos_lfs_read(const struct lfs_config *c, lfs_block_t block,
@@ -87,13 +137,16 @@ static bool mgos_vfs_fs_lfs_parse_opts(struct mgos_vfs_fs *fs,
   cfg->sync = mgos_lfs_sync;
   cfg->read_size = MGOS_LFS_DEFAULT_IO_SIZE;
   cfg->block_size = MGOS_LFS_DEFAULT_BLOCK_SIZE;
-  cfg->lookahead = 1024;
+  cfg->lookahead_size = 1024;
   lfs_size_t size = 0;
   if (opts != NULL) {
-    json_scanf(opts, strlen(opts), "{size: %u, bs: %u, is: %u}", &size,
-               &cfg->block_size, &cfg->read_size);
+    json_scanf(opts, strlen(opts), "{size: %u, bs: %u, is: %u, cs: %u}", &size,
+               &cfg->block_size, &cfg->read_size, &cfg->read_size);
   }
   cfg->prog_size = cfg->read_size;
+  if (cfg->cache_size == 0) {
+    cfg->cache_size = cfg->read_size * 4;
+  }
   if (size == 0) {
     size = mgos_vfs_dev_get_size(fs->dev);
     if (size == 0) {
@@ -112,6 +165,14 @@ out:
   return r;
 }
 
+static bool mgos_vfs_fs_lfs_is_v1(struct mgos_vfs_dev *dev) {
+  uint8_t buf[64];
+  enum mgos_vfs_dev_err res = mgos_vfs_dev_read(dev, 0, sizeof(buf), buf);
+  return (res == MGOS_VFS_DEV_ERR_NONE &&
+          memcmp(buf + 0x28, "littlefs", 8) == 0 &&
+          buf[0x26] == 1 /* major version */);
+}
+
 static bool mgos_vfs_fs_lfs_mount(struct mgos_vfs_fs *fs, const char *opts) {
   int mr;
   bool ret = false;
@@ -122,7 +183,39 @@ static bool mgos_vfs_fs_lfs_mount(struct mgos_vfs_fs *fs, const char *opts) {
   cfg = &fsd->cfg;
   if (!mgos_vfs_fs_lfs_parse_opts(fs, cfg, opts)) goto out;
   cfg->context = fsd;
-  mr = lfs_mount(&fsd->lfs, cfg);
+  // Check if we are trying to mount v1 FS and acct accordingly.
+  if (!mgos_vfs_fs_lfs_is_v1(fs->dev)) {
+    mr = lfs_mount(&fsd->lfs, cfg);
+  } else {
+#if MGOS_LFS1_COMPAT == 1
+    LOG(LL_INFO, ("Mounting LFSv1 filesystem..."));
+    struct lfs1_config cfg1 = {
+        .context = cfg->context,
+        .read = (void *) mgos_lfs_read,
+        .prog = (void *) mgos_lfs_prog,
+        .erase = (void *) mgos_lfs_erase,
+        .sync = (void *) mgos_lfs_sync,
+        .read_size = cfg->read_size,
+        .prog_size = cfg->prog_size,
+        .block_size = cfg->block_size,
+        .block_count = cfg->block_count,
+        .lookahead = cfg->lookahead_size,
+    };
+    fsd->cfg1 = cfg1;
+    fsd->is_v1 = true;
+    mr = lfs1_mount(&fsd->lfs1, &fsd->cfg1);
+#else
+#if MGOS_LFS1_COMPAT == 2
+    LOG(LL_WARN, ("LFSv1 filesystem found, re-creating as v2..."));
+    mr = lfs_format(&fsd->lfs, cfg);
+    if (mr != LFS_ERR_OK) goto out;
+    mr = lfs_mount(&fsd->lfs, cfg);
+#else
+    LOG(LL_ERROR, ("LFSv1 is not supported, check MGOS_LFS1_COMPAT"));
+    mr = LFS_ERR_CORRUPT;
+#endif
+#endif  // MGOS_LFS1_COMPAT == 1
+  }
   ret = (mr == LFS_ERR_OK);
   LOG((ret ? LL_DEBUG : LL_ERROR),
       ("size %u rs %u ps %u bs %u => %d",
@@ -145,6 +238,7 @@ static bool mgos_vfs_fs_lfs_mkfs(struct mgos_vfs_fs *fs, const char *opts) {
   struct lfs_config *cfg = &fsd.cfg;
   cfg->context = &fsd;
   if (!mgos_vfs_fs_lfs_parse_opts(fs, cfg, opts)) goto out;
+  // Note: mkfs is always for V2.
   mr = lfs_format(&fsd.lfs, cfg);
   ret = (mr == LFS_ERR_OK);
   LOG((ret ? LL_DEBUG : LL_ERROR),
@@ -158,7 +252,7 @@ out:
 
 static bool mgos_vfs_fs_lfs_umount(struct mgos_vfs_fs *fs) {
   struct mgos_lfs_data *fsd = (struct mgos_lfs_data *) fs->fs_data;
-  lfs_unmount(&fsd->lfs);
+  LFS12_OP(unmount, fsd);
   free(fsd);
   return true;
 }
@@ -173,7 +267,7 @@ static int count_used_blocks(void *arg, lfs_block_t block) {
 static size_t mgos_vfs_fs_lfs_get_blocks_used(struct mgos_lfs_data *fsd) {
   size_t res = fsd->num_blocks_used;
   if (res == 0) {
-    if (lfs_traverse(&fsd->lfs, count_used_blocks, &res) == LFS_ERR_OK) {
+    if (LFS12_OP_N(traverse, fsd, count_used_blocks, &res) == LFS_ERR_OK) {
       fsd->num_blocks_used = res;
     } else {
       res = 0;
@@ -276,14 +370,14 @@ static int mgos_vfs_fs_lfs_open(struct mgos_vfs_fs *fs, const char *path,
     r = LFS_ERR_NOMEM;
     goto out;
   }
-  r = lfs_file_open(&fsd->lfs, &fdi->f, path, lfs_flags);
+  r = LFS12_FILE_OP_N(open, fsd, fdi, path, lfs_flags);
   if (r == LFS_ERR_OK) {
     fdi->fd = 0;
     while (mgos_lfs_get_fdi(fsd, fdi->fd) != NULL) {
       fdi->fd = MGOS_VFS_VFD_TO_FS_FD(fdi->fd + 1);
       if (fdi->fd == 0) {
         /* Ran out of descriptors! */
-        lfs_file_close(&fsd->lfs, &fdi->f);
+        LFS12_FILE_OP(close, fsd, fdi);
         r = LFS_ERR_NOMEM;
         goto out;
       }
@@ -305,7 +399,7 @@ static int mgos_vfs_fs_lfs_close(struct mgos_vfs_fs *fs, int fd) {
     r = LFS_ERR_BADF;
     goto out;
   }
-  r = lfs_file_close(&fsd->lfs, &fdi->f);
+  r = LFS12_FILE_OP(close, fsd, fdi);
   /* Even if error is returned, file is no longer valid. */
   SLIST_REMOVE(&fsd->fds, fdi, mgos_lfs_fd_info, next);
   free(fdi);
@@ -322,7 +416,7 @@ static ssize_t mgos_vfs_fs_lfs_read(struct mgos_vfs_fs *fs, int fd, void *dstv,
     r = LFS_ERR_BADF;
     goto out;
   }
-  r = lfs_file_read(&fsd->lfs, &fdi->f, dstv, size);
+  r = LFS12_FILE_OP_N(read, fsd, fdi, dstv, size);
 out:
   return mgos_lfs_set_errno(r);
 }
@@ -336,31 +430,48 @@ ssize_t mgos_vfs_fs_lfs_write(struct mgos_vfs_fs *fs, int fd, const void *datav,
     r = LFS_ERR_BADF;
     goto out;
   }
-  r = lfs_file_write(&fsd->lfs, &fdi->f, datav, size);
+  r = LFS12_FILE_OP_N(write, fsd, fdi, datav, size);
 out:
   return mgos_lfs_set_errno(r);
 }
 
+#if MGOS_LFS1_COMPAT == 1
+#define LFS12_IS_DIR(fsd, info)                   \
+  ((fsd->is_v1 ? info.info1.type == LFS1_TYPE_DIR \
+               : info.info.type == LFS_TYPE_DIR))
+#define LFS12_IS_REG(fsd, info)                   \
+  ((fsd->is_v1 ? info.info1.type == LFS1_TYPE_REG \
+               : info.info.type == LFS_TYPE_REG))
+#define LFS12_FI_SIZE(fsd, info) \
+  ((fsd->is_v1 ? info.info1.size : info.info.size))
+#else
+#define LFS12_IS_DIR(fsd, info) (info.info.type == LFS_TYPE_DIR)
+#define LFS12_IS_REG(fsd, info) (info.info.type == LFS_TYPE_REG)
+#define LFS12_FI_SIZE(fsd, info) (info.info.size)
+#endif
+
 int mgos_vfs_fs_lfs_stat(struct mgos_vfs_fs *fs, const char *path,
                          struct stat *st) {
-  struct lfs_info info;
+  union {
+    struct lfs_info info;
+#if MGOS_LFS1_COMPAT == 1
+    struct lfs1_info info1;
+#endif
+  } info;
   struct mgos_lfs_data *fsd = (struct mgos_lfs_data *) fs->fs_data;
-  int r = lfs_stat(&fsd->lfs, path, &info);
+  int r = LFS12_OP_N(stat, fsd, path, (void *) &info);
   if (r != LFS_ERR_OK) goto out;
   memset(st, 0, sizeof(*st));
-  st->st_mode = 0777;
-  switch (info.type) {
-    case LFS_TYPE_DIR:
-      st->st_mode |= S_IFDIR;
-      break;
-    case LFS_TYPE_REG:
-      st->st_mode |= S_IFREG;
-      break;
-    default:
-      r = LFS_ERR_CORRUPT;
-      goto out;
+  st->st_mode = 0666;
+  if (LFS12_IS_DIR(fsd, info)) {
+    st->st_mode |= (S_IFDIR | 0111);
+  } else if (LFS12_IS_REG(fsd, info)) {
+    st->st_mode |= S_IFREG;
+  } else {
+    r = LFS_ERR_CORRUPT;
+    goto out;
   }
-  st->st_size = info.size;
+  st->st_size = LFS12_FI_SIZE(fsd, info);
   st->st_nlink = 1;
 out:
   return mgos_lfs_set_errno(r);
@@ -376,7 +487,7 @@ int mgos_vfs_fs_lfs_fstat(struct mgos_vfs_fs *fs, int fd, struct stat *st) {
   }
   memset(st, 0, sizeof(*st));
   st->st_mode = S_IFREG | 0777;
-  st->st_size = lfs_file_size(&fsd->lfs, &fdi->f);
+  st->st_size = LFS12_FILE_OP(size, fsd, fdi);
   st->st_nlink = 1;
 out:
   return mgos_lfs_set_errno(r);
@@ -405,7 +516,7 @@ static off_t mgos_vfs_fs_lfs_lseek(struct mgos_vfs_fs *fs, int fd, off_t offset,
       r = LFS_ERR_INVAL;
       goto out;
   }
-  r = lfs_file_seek(&fsd->lfs, &fdi->f, offset, lwh);
+  r = LFS12_FILE_OP_N(seek, fsd, fdi, offset, lwh);
 out:
   return mgos_lfs_set_errno(r);
 }
@@ -413,18 +524,23 @@ out:
 static int mgos_vfs_fs_lfs_rename(struct mgos_vfs_fs *fs, const char *src,
                                   const char *dst) {
   struct mgos_lfs_data *fsd = (struct mgos_lfs_data *) fs->fs_data;
-  return mgos_lfs_set_errno(lfs_rename(&fsd->lfs, src, dst));
+  return mgos_lfs_set_errno(LFS12_OP_N(rename, fsd, src, dst));
 }
 
 static int mgos_vfs_fs_lfs_unlink(struct mgos_vfs_fs *fs, const char *path) {
   struct mgos_lfs_data *fsd = (struct mgos_lfs_data *) fs->fs_data;
-  return mgos_lfs_set_errno(lfs_remove(&fsd->lfs, path));
+  return mgos_lfs_set_errno(LFS12_OP_N(remove, fsd, path));
 }
 
 #if MG_ENABLE_DIRECTORY_LISTING
 struct mgos_lfs_dir {
   DIR dir;
-  lfs_dir_t lfsd;
+  union {
+    lfs_dir_t lfsd;
+#if MGOS_LFS1_COMPAT == 1
+    lfs1_dir_t lfsd1;
+#endif
+  };
   struct dirent de;
 };
 
@@ -438,7 +554,7 @@ static DIR *mgos_vfs_fs_lfs_opendir(struct mgos_vfs_fs *fs, const char *path) {
     goto out;
   }
 
-  r = lfs_dir_open(&fsd->lfs, &d->lfsd, path);
+  r = LFS12_DIR_OP_N(open, fsd, d, path);
 
 out:
   if (r != LFS_ERR_OK) {
@@ -452,11 +568,22 @@ static struct dirent *mgos_vfs_fs_lfs_readdir(struct mgos_vfs_fs *fs,
                                               DIR *dir) {
   struct mgos_lfs_data *fsd = (struct mgos_lfs_data *) fs->fs_data;
   struct mgos_lfs_dir *d = (struct mgos_lfs_dir *) dir;
-  struct lfs_info info;
-  int r = lfs_dir_read(&fsd->lfs, &d->lfsd, &info);
+  union {
+    struct lfs_info info;
+#if MGOS_LFS1_COMPAT == 1
+    struct lfs1_info info1;
+#endif
+  } info;
+  int r = LFS12_DIR_OP_N(read, fsd, d, (void *) &info);
   if (r <= 0) goto out;
-  strncpy(d->de.d_name, info.name,
-          MAX(sizeof(d->de.d_name), sizeof(info.name)) - 1);
+#if MGOS_LFS1_COMPAT == 1
+  if (fsd->is_v1) {
+    strncpy(d->de.d_name, info.info1.name,
+            MAX(sizeof(d->de.d_name), sizeof(info.info1.name)) - 1);
+  } else
+#endif
+    strncpy(d->de.d_name, info.info.name,
+            MAX(sizeof(d->de.d_name), sizeof(info.info.name)) - 1);
 out:
   if (r <= 0) {
     mgos_lfs_set_errno(r);
@@ -468,7 +595,7 @@ out:
 static int mgos_vfs_fs_lfs_closedir(struct mgos_vfs_fs *fs, DIR *dir) {
   struct mgos_lfs_data *fsd = (struct mgos_lfs_data *) fs->fs_data;
   struct mgos_lfs_dir *d = (struct mgos_lfs_dir *) dir;
-  int r = lfs_dir_close(&fsd->lfs, &d->lfsd);
+  int r = LFS12_DIR_OP(close, fsd, d);
   free(d);
   return mgos_lfs_set_errno(r);
 }

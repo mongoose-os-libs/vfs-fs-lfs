@@ -18,10 +18,10 @@
 #include "mem_lfs.h"
 
 #include <dirent.h>
+#include <errno.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <fcntl.h>
-#include <errno.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -92,7 +92,8 @@ int mem_lfs_mount(int fs_size, int bs) {
   s_cfg.read_size = 64;
   s_cfg.prog_size = 64;
   s_cfg.block_size = bs;
-  s_cfg.lookahead = 1024;
+  s_cfg.lookahead_size = 1024;
+  s_cfg.cache_size = 256;
   s_cfg.block_count = fs_size / bs;
 
   return lfs_mount(&s_lfs, &s_cfg);
@@ -110,7 +111,8 @@ int mem_lfs_format(int fs_size, int bs) {
   s_cfg.read_size = 64;
   s_cfg.prog_size = 64;
   s_cfg.block_size = bs;
-  s_cfg.lookahead = 1024;
+  s_cfg.lookahead_size = 1024;
+  s_cfg.cache_size = 256;
   s_cfg.block_count = fs_size / bs;
 
   image = (char *) malloc(fs_size);
