@@ -199,7 +199,7 @@ int main(int argc, char **argv) {
   }
 
   uint32_t total = fs_size, used = 0;
-  lfs_traverse(mem_lfs_get(), count_used, &used);
+  lfs_fs_traverse(mem_lfs_get(), count_used, &used);
   used *= bs;
   fprintf(stderr, "     FS stats : space total=%u, used=%u, free=%u\n", total,
           used, total - used);

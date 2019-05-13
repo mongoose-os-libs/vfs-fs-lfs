@@ -1,8 +1,8 @@
 .DEFAULT_GOAL = all
 
 FROZEN_PATH ?= $(CURDIR)/../../../frozen
-LFS_SRC_PATH ?= $(CURDIR)/../src/littlefs
-LFS_INCLUDE_PATH ?= $(CURDIR)/../src/littlefs
+LFS_SRC_PATH ?= $(CURDIR)/../littlefs
+LFS_INCLUDE_PATH ?= $(CURDIR)/../littlefs
 
 LFS_TOOLS_CFLAGS = -Wall -Werror -DNO_ESP -DLFS_TEST_VISUALISATION -DLFS_TOOLS_BUILD -g
 
