@@ -15,7 +15,7 @@ endef
 COMMON_FILES = mem_lfs.c $(LFS_SRC_PATH)/lfs.c $(LFS_SRC_PATH)/lfs_util.c $(FROZEN_PATH)/frozen.c
 
 mklfs: mklfs.c $(COMMON_FILES)
-	@echo GCC mkspiffs
+	@echo GCC $@
 	$(call compile,)
 
 clean:

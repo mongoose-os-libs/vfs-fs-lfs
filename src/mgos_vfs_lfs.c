@@ -138,10 +138,13 @@ static bool mgos_vfs_fs_lfs_parse_opts(struct mgos_vfs_fs *fs,
   cfg->read_size = MGOS_LFS_DEFAULT_IO_SIZE;
   cfg->block_size = MGOS_LFS_DEFAULT_BLOCK_SIZE;
   cfg->lookahead_size = 1024;
+  cfg->block_cycles = 512;
   lfs_size_t size = 0;
   if (opts != NULL) {
-    json_scanf(opts, strlen(opts), "{size: %u, bs: %u, is: %u, cs: %u}", &size,
-               &cfg->block_size, &cfg->read_size, &cfg->read_size);
+    json_scanf(opts, strlen(opts),
+               "{size: %u, bs: %u, is: %u, cs: %u, bcy: %u}", &size,
+               &cfg->block_size, &cfg->read_size, &cfg->read_size,
+               &cfg->block_cycles);
   }
   cfg->prog_size = cfg->read_size;
   if (cfg->cache_size == 0) {
