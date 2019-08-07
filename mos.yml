@@ -41,6 +41,11 @@ conds:
       cdefs:
         MGOS_LFS1_COMPAT: 1
 
+  # ESP8266 toolchain uses ancient GCC 4.8.5 which is too dumb to see through typedefs.
+  - when: mos.platform == "esp8266"
+    apply:
+      cflags: ["-Wno-format"]
+
 tags:
   - c
   - fs
