@@ -22,6 +22,9 @@ no_implicit_init_deps: true
 init_after:
   - vfs-common
 
+build_vars:
+  MGOS_ROOT_FS_OPTS_LFS: '{"bs":4096,"is":128}'
+
 cdefs:
   LFS_NO_DEBUG: 1
   # LFSv1 compatibility mode
@@ -33,6 +36,7 @@ cdefs:
   #            This option is suitable for cases where LFS is only used as scratch space.
   # TODO(rojer): Options for r/o mounts (OTA) and in-place migration when r/w.
   MGOS_LFS1_COMPAT: 0
+  MGOS_ROOT_FS_OPTS_LFS: '{"bs":4096,"is":128}'
 
 conds:
   # STM32 relies more heavily on LFS, turn on full compatibility by default.
