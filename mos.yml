@@ -1,11 +1,11 @@
 author: mongoose-os
 description: Implements the mos VFS interface for little FS (https://github.com/ARMmbed/littlefs)
 type: lib
-version: 2.1
+version: 2.1.4
 
 sources:
   - src
-  # https://github.com/ARMmbed/littlefs @ f35fb8c14866a4a4677756f6dbeca78f8a9b4001
+  # https://github.com/ARMmbed/littlefs @ ce2c01f098f4d2b9479de5a796c3bb531f1fe14c
   - littlefs
   # https://github.com/ARMmbed/littlefs @ 4827795e4b8b4b1c849ac50347fb49c4dd443964
   - littlefs1

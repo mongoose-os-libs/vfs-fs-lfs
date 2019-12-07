@@ -7,8 +7,8 @@
 #ifndef LFS_H
 #define LFS_H
 
-#include <stdbool.h>
 #include <stdint.h>
+#include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C"
