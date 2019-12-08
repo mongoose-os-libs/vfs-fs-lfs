@@ -168,12 +168,22 @@ out:
   return r;
 }
 
+static bool mgos_vfs_fs_lfs_probe_internal(struct mgos_vfs_dev *dev,
+                                           uint8_t *major_version) {
+  uint8_t buf[16] = {0};
+  enum mgos_vfs_dev_err res = mgos_vfs_dev_read(dev, 0x20, sizeof(buf), buf);
+  if (major_version != NULL) *major_version = buf[6];
+  return (res == MGOS_VFS_DEV_ERR_NONE && memcmp(buf + 8, "littlefs", 8) == 0);
+}
+
+bool mgos_vfs_fs_lfs_probe(struct mgos_vfs_dev *dev) {
+  return mgos_vfs_fs_lfs_probe_internal(dev, NULL);
+}
+
 static bool mgos_vfs_fs_lfs_is_v1(struct mgos_vfs_dev *dev) {
-  uint8_t buf[64];
-  enum mgos_vfs_dev_err res = mgos_vfs_dev_read(dev, 0, sizeof(buf), buf);
-  return (res == MGOS_VFS_DEV_ERR_NONE &&
-          memcmp(buf + 0x28, "littlefs", 8) == 0 &&
-          buf[0x26] == 1 /* major version */);
+  uint8_t major_version;
+  return (mgos_vfs_fs_lfs_probe_internal(dev, &major_version) &&
+          major_version == 1);
 }
 
 static bool mgos_vfs_fs_lfs_mount(struct mgos_vfs_fs *fs, const char *opts) {
