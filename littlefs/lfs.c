@@ -133,6 +133,7 @@ static int lfs_bd_flush(lfs_t *lfs,
             return err;
         }
 
+#ifndef LFS_NO_VALIDATE
         if (validate) {
             // check data on disk
             lfs_cache_drop(lfs, rcache);
@@ -147,6 +148,10 @@ static int lfs_bd_flush(lfs_t *lfs,
                 return LFS_ERR_CORRUPT;
             }
         }
+#else
+        (void) rcache;
+        (void) validate;
+#endif
 
         lfs_cache_zero(lfs, pcache);
     }
