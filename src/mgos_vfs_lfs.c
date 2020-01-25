@@ -60,6 +60,8 @@
 #define MGOS_LFS_DEFAULT_IO_SIZE 64
 #define MGOS_LFS_DEFAULT_BLOCK_SIZE 4096
 
+#define DU mgos_get_stderr_uart()
+
 static const struct mgos_vfs_fs_ops mgos_vfs_fs_lfs_ops;
 
 struct mgos_lfs_fd_info {
@@ -102,6 +104,9 @@ static int mgos_lfs_read(const struct lfs_config *c, lfs_block_t block,
   struct mgos_lfs_data *fsd = (struct mgos_lfs_data *) c->context;
   enum mgos_vfs_dev_err res = mgos_vfs_dev_read(
       fsd->fs->dev, block * c->block_size + off, size, buffer);
+#ifdef MGOS_VFS_LFS_DEBUG_IO
+  mgos_uart_printf(DU, "r%d", (int) block);
+#endif
   return (res == MGOS_VFS_DEV_ERR_CORRUPT ? LFS_ERR_CORRUPT : res);
 }
 
@@ -111,6 +116,9 @@ static int mgos_lfs_prog(const struct lfs_config *c, lfs_block_t block,
   enum mgos_vfs_dev_err res = mgos_vfs_dev_write(
       fsd->fs->dev, block * c->block_size + off, size, buffer);
   fsd->num_blocks_used = 0;
+#ifdef MGOS_VFS_LFS_DEBUG_IO
+  mgos_uart_printf(DU, "w%d", (int) block);
+#endif
   return (res == MGOS_VFS_DEV_ERR_CORRUPT ? LFS_ERR_CORRUPT : res);
 }
 
@@ -119,11 +127,17 @@ static int mgos_lfs_erase(const struct lfs_config *c, lfs_block_t block) {
   enum mgos_vfs_dev_err res =
       mgos_vfs_dev_erase(fsd->fs->dev, block * c->block_size, c->block_size);
   fsd->num_blocks_used = 0;
+#ifdef MGOS_VFS_LFS_DEBUG_IO
+  mgos_uart_printf(DU, " E%d", (int) block);
+#endif
   return (res == MGOS_VFS_DEV_ERR_CORRUPT ? LFS_ERR_CORRUPT : res);
 }
 
 static int mgos_lfs_sync(const struct lfs_config *c) {
   (void) c;
+#ifdef MGOS_VFS_LFS_DEBUG_IO
+  mgos_uart_printf(DU, "S");
+#endif
   return LFS_ERR_OK;
 }
 
