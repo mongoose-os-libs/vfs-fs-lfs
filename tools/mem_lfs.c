@@ -95,6 +95,7 @@ int mem_lfs_mount(int fs_size, int bs) {
   s_cfg.lookahead_size = 1024;
   s_cfg.cache_size = 256;
   s_cfg.block_count = fs_size / bs;
+  s_cfg.block_cycles = 512;
 
   return lfs_mount(&s_lfs, &s_cfg);
 }
@@ -114,6 +115,7 @@ int mem_lfs_format(int fs_size, int bs) {
   s_cfg.lookahead_size = 1024;
   s_cfg.cache_size = 256;
   s_cfg.block_count = fs_size / bs;
+  s_cfg.block_cycles = 512;
 
   image = (char *) malloc(fs_size);
   memset(image, 0xff, fs_size);
