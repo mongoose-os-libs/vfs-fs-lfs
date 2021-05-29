@@ -16,7 +16,7 @@ includes:
   - littlefs1
 
 libs:
-  - origin: https://github.com/mongoose-os-libs/vfs-common
+  - location: https://github.com/mongoose-os-libs/vfs-common
 
 no_implicit_init_deps: true
 init_after:
