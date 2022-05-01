@@ -38,13 +38,6 @@ cdefs:
   MGOS_LFS1_COMPAT: 0
   MGOS_ROOT_FS_OPTS_LFS: '{"bs":4096,"is":128}'
 
-conds:
-  # STM32 relies more heavily on LFS, turn on full compatibility by default.
-  - when: mos.platform == "stm32"
-    apply:
-      cdefs:
-        MGOS_LFS1_COMPAT: 1
-
 tags:
   - c
   - fs
