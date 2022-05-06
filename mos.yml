@@ -26,6 +26,7 @@ build_vars:
   MGOS_ROOT_FS_OPTS_LFS: '{"bs":4096,"is":128}'
 
 cdefs:
+  LFS_NO_ASSERT: 1
   LFS_NO_DEBUG: 1
   # LFSv1 compatibility mode
   # 0 - none:  No LFSv1 code in the firmware, attempts to mount LFSv1 filesystem results in an error.
